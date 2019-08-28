@@ -8,9 +8,9 @@
 const float power_supply_smoothing = 10;    // per frame
 
 // electron beam parameters
-const int electron_count = 10000;           // per frame
+const int electron_count = 20000;           // per frame
 const float electron_intensity = 500;       // total energy emitted per frame
-const float electron_scattering = 0.5;      // impurity of the beam
+const float electron_scattering = 0.25;     // impurity of the beam
 
 // phosphor parameters
 const float phosphor_persistence = 10;      // divides how much emittance remains after one frame
@@ -28,8 +28,8 @@ const float phosphor_emittance_green = 1;
 const float phosphor_emittance_blue = 0.2;
 
 // bloom parameters
-const int bloom_kernel_diameter = 1;
-const float bloom_brightness = 7.5;
+const int bloom_kernel_diameter = 0;        // 0 to disable bloom
+const float bloom_brightness = 5;
 const float bloom_spread = 100;
 
 // screen dimensions
@@ -207,14 +207,16 @@ vec2 sample_path (float n) {
 
 // generate the convolution kernel to pass to the bloom shader
 void generate_kernel () {
-    for (int i = 0; i < bloom_kernel_size; i++) {
-        float x = i % bloom_kernel_diameter;
-        float y = i / bloom_kernel_diameter;
-        float offset_x = x - bloom_kernel_radius;
-        float offset_y = y - bloom_kernel_radius;
-        float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
-        float value = pow (radius, 1.0 / bloom_spread);
-        kernel[i] = fmax (0, 1 - value);
+    if (bloom_kernel_diameter > 0) {
+        for (int i = 0; i < bloom_kernel_size; i++) {
+            float x = i % bloom_kernel_diameter;
+            float y = i / bloom_kernel_diameter;
+            float offset_x = x - bloom_kernel_radius;
+            float offset_y = y - bloom_kernel_radius;
+            float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
+            float value = pow (radius, 1.0 / bloom_spread);
+            kernel[i] = fmax (0, 1 - value);
+        }
     }
 }
 

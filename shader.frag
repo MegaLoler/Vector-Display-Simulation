@@ -36,22 +36,27 @@ void main () {
     // the accumulator
     vec3 color = vec3 (0.0, 0.0, 0.0);
 
-    // convolve
-    float kernel_radius = kernel_diameter / 2.0;
-    for (int i = 0; i < kernel_diameter * kernel_diameter; i++) {
-        // get the kernel position
-        float x = mod (float (i), kernel_diameter);
-        float y = floor (float (i) / kernel_diameter);
-        vec2 kernel_position = vec2 (x, y);
+    // if diameter is 0 then disable bloom lol
+    if (kernel_diameter > 0) {
+        // convolve
+        float kernel_radius = kernel_diameter / 2.0;
+        for (int i = 0; i < kernel_diameter * kernel_diameter; i++) {
+            // get the kernel position
+            float x = mod (float (i), kernel_diameter);
+            float y = floor (float (i) / kernel_diameter);
+            vec2 kernel_position = vec2 (x, y);
 
-        // get the corresponding source position
-        vec2 offset = kernel_position - kernel_radius;
-        vec2 source_position = position + offset;
+            // get the corresponding source position
+            vec2 offset = kernel_position - kernel_radius;
+            vec2 source_position = position + offset;
 
-        // sample and accumulate
-        float kernel_sample = sample_kernel (kernel_position);
-        vec3 source_sample = sample_phosphor (source_position);
-        color += source_sample * kernel_sample;
+            // sample and accumulate
+            float kernel_sample = sample_kernel (kernel_position);
+            vec3 source_sample = sample_phosphor (source_position);
+            color += source_sample * kernel_sample;
+        }
+    } else {
+        color = sample_phosphor (position);
     }
 
     // adjust brightness
