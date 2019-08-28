@@ -4,6 +4,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+// drawing parameters
+const bool light_pen_mode = false;          // follows mouse cursor instead of drawing rotating cube
+
 // power supply parameters
 const float power_supply_smoothing = 10;    // per frame
 
@@ -13,11 +16,11 @@ const float electron_intensity = 500;       // total energy emitted per frame
 const float electron_scattering = 0.25;     // impurity of the beam
 
 // phosphor parameters
+const bool enable_phosphor_filter = true;
 const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
 const float phosphor_reflectance_green = 0.003;
 const float phosphor_reflectance_blue = 0.003;
-const bool enable_phosphor_filter = true;
 // amber
 //const float phosphor_emittance_red = 1;
 //const float phosphor_emittance_green = 0.749;
@@ -114,6 +117,7 @@ struct vec3 {
     float y;
     float z;
     vec3 (float x = 0, float y = 0, float z = 0) : x (x), y (y), z (z) {}
+    vec3 (vec2 v) : vec3 (v.x, v.y) {};
     vec2 project () {
         return vec2 (x / (z + 1), y / (z + 1));
     }
@@ -162,6 +166,10 @@ const float center_y = height / 2.0;
 float power_supply_in = 1;     // power input; 1 = normal, 0 = off
 float power_supply_out = 0;    // smoothed output of power supply
 
+// normalized mouse coordinates
+vec2 mouse;
+vec2 previous_mouse;
+
 // electron buffer
 // new electrons hitting the screen
 // adjusted for decay after time hit between current and last frame
@@ -189,6 +197,7 @@ float noise () {
 // sample the path for the electron beam to trace per frame
 // project to 2d
 // 0 <= n <= 1
+// TODO: add bezier smoothing or something
 vec2 sample_path (float n) {
     if (vertex_count == 0)
         return vec2 ().map ();
@@ -223,9 +232,15 @@ void generate_kernel () {
 void prepare_path (float time) {
     vertex_count = 0;
 
+    if (light_pen_mode) {
+        path[vertex_count++] = vec3 (previous_mouse);
+        path[vertex_count++] = vec3 (mouse);
+        return;
+    }
+
     // rotating cube
 
-    // normal vertices
+    // normalized vertices
     vec3 p000 = vec3 (-1, -1, -1);
     vec3 p001 = vec3 (-1, -1, 1);
     vec3 p010 = vec3 (-1, 1, -1);
@@ -444,6 +459,11 @@ void on_resize (GLFWwindow *window, int width, int height) {
 void process_input (GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose (window, true);
+
+    double x, y;
+    glfwGetCursorPos (window, &x, &y);
+    previous_mouse = mouse;
+    mouse = vec2 (x / width * 2 - 1, -(y / height * 2 - 1));
 }
 
 void on_keyboard (GLFWwindow* window, int key, int scancode, int action, int mods) {
