@@ -12,7 +12,18 @@ float noise () {
 struct vec2 {
     float x;
     float y;
-    vec2 (float x, float y) : x (x), y (y) {}
+    vec2 (float x = 0, float y = 0) : x (x), y (y) {}
+};
+
+// 3d vector representation
+struct vec3 {
+    float x;
+    float y;
+    float z;
+    vec3 (float x = 0, float y = 0, float z = 0) : x (x), y (y), z (z) {}
+    vec2 project () {
+        return vec2 (x / z, y / z);
+    }
 };
 
 // power supply parameters
@@ -35,7 +46,7 @@ const float phosphor_reflectance_blue = 0.003;
 // green
 const float phosphor_emittance_red = 0.2;
 const float phosphor_emittance_green = 1;
-const float phosphor_emittance_blue = 0;
+const float phosphor_emittance_blue = 0.2;
 
 // bloom parameters
 const int bloom_kernel_diameter = 10;
@@ -52,7 +63,7 @@ const int size = width * height;
 const float intensity_per_electron = electron_intensity / electron_count;
 const float electron_delta = 1.0 / electron_count;
 const float phosphor_decay = 1.0 / (1 + phosphor_persistence);
-const float power_supply_decay = 1.0 / (1 + power_supply_smoothing);
+const float power_supply_decay = 1.0 / (1 + power_supply_smoothing) / electron_count;
 const int bloom_kernel_radius = bloom_kernel_diameter / 2;
 const int bloom_kernel_size = bloom_kernel_diameter * bloom_kernel_diameter;
 const float center_x = width / 2.0;
@@ -74,19 +85,30 @@ float phosphor_buffer[size];
 // convolution kernel for bloom shader
 float kernel[bloom_kernel_size];
 
+// the 3d path for the electron beam to trace
+vec3 path[1024];
+int vertex_count = 0;
+
 // opengl stuff
 GLuint vbo, vao, program;
 GLuint phosphor_texture, kernel_texture;
 
 // sample the path for the electron beam to trace per frame
+// project to 2d
 // 0 <= n <= 1
 vec2 sample_path (float n) {
-    //TMP circle
-    const float r = 100;
-    const float x = 200;
-    const float y = 200;
-    float a = n * M_PI * 2;
-    return vec2 (cos (a) * r + x, sin (a) * r + y);
+    if (vertex_count == 0)
+        return vec2 (center_x, center_y);
+    else if (vertex_count == 1)
+        return path[0].project ();
+
+    double n2 = n * (vertex_count - 1);
+    int i = floor (n2);
+    n = n2 - i;
+    vec3 p1 = path[i];
+    vec3 p2 = path[i + 1];
+    vec3 delta = vec3 ((p2.x - p1.x) * n, (p2.y - p1.y) * n);
+    return vec3 (p1.x + delta.x, p1.y + delta.y).project ();
 }
 
 // generate the convolution kernel to pass to the bloom shader
@@ -106,14 +128,13 @@ void render () {
 
     // TODO: make unit time 1 second and incorporate variable delta time
 
-    // update the power supply
-    // TODO: integrate power supply out per electron instead of per frame for more accuracy
-    power_supply_out += (power_supply_in - power_supply_out) * power_supply_decay;
-    float power_supply_out_compliment = 1 - power_supply_out;
-
     // prepare the electron buffer
     std::fill_n (electron_buffer, size, 0); // clear it first
     for (float n = 0; n < 1; n += electron_delta) {
+
+        // update the power supply
+        power_supply_out += (power_supply_in - power_supply_out) * power_supply_decay;
+        float power_supply_out_compliment = 1 - power_supply_out;
 
         // sample the ideal point on the path to be traced
         vec2 point = sample_path (n);
