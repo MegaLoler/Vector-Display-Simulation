@@ -1,4 +1,9 @@
 #include <iostream>
+#include <cmath>
+
+double noise () {
+    return (double) rand () / RAND_MAX;
+}
 
 // 2d vector representation
 struct vec2 {
@@ -8,7 +13,7 @@ struct vec2 {
 };
 
 // power supply parameters
-const power_supply_smoothing = 10;          // per frame
+const double power_supply_smoothing = 10;   // per frame
 
 // electron beam parameters
 const int electron_count = 10000;           // per frame
@@ -25,14 +30,15 @@ const double bloom_brightness = 15;
 const double bloom_spread = 500;
 
 // screen dimensions
-int width = 480;
-int height = 360;
-int size = width * height;
+// TODO: allow screen resizing
+const int width = 480;
+const int height = 360;
+const int size = width * height;
 
 // precalculations
 const double intensity_per_electron = electron_intensity / electron_count;
 const double electron_delta = 1.0 / electron_count;
-const double phosphor_decay = 1.0 / (1 + phosphor_peristence);
+const double phosphor_decay = 1.0 / (1 + phosphor_persistence);
 const double power_supply_decay = 1.0 / (1 + power_supply_smoothing);
 
 // state variables
@@ -47,13 +53,6 @@ double electron_buffer[size];
 // phosphor buffer
 // total emittance of phosphor at each pixel
 double phosphor_buffer[size];
-
-// give new screen size
-void update_screen_size (int width, int height) {
-    ::width = width;
-    ::height = height;
-    size = width * height;
-}
 
 // sample the path for the electron beam to trace per frame
 // 0 <= n <= 1
@@ -75,7 +74,7 @@ void render () {
     power_supply_out += (power_supply_in - power_supply_out) * power_supply_decay;
 
     // prepare the electron buffer
-    fill_n (electron_buffer, size, 0); // clear it first
+    std::fill_n (electron_buffer, size, 0); // clear it first
     for (double n = 0; n < 1; n += electron_delta) {
 
         // sample the ideal point on the path to be traced
@@ -108,7 +107,7 @@ void render () {
     // update the phosphor buffer
     // TODO: convert to shader for speed
     for (int i = 0; i < size; i++) {
-        phosphor[i] += (electron_buffer[i] - phosphor[i]) * phosphor_decay;
+        phosphor_buffer[i] += (electron_buffer[i] - phosphor_buffer[i]) * phosphor_decay;
     }
 
     // render the phosphor buffer with bloom filter
@@ -116,6 +115,8 @@ void render () {
 }
 
 int main (int argc, const char **argv) {
+
+    srand (time (0));
 
     return 0;
 }
