@@ -334,7 +334,7 @@ void render (float time) {
         float decay_curve = 1 - n * n;
         float intensity = intensity_per_electron * power_supply_out;
         if (enable_phosphor_filter)
-            intensity -= intensity_per_electron * phosphor_decay * decay_curve;
+            intensity -= intensity * phosphor_decay * decay_curve;
 
         // plot the result on the electron buffer
         electron_buffer[int(x) + int(y) * width] += intensity;
