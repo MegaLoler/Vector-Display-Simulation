@@ -13,11 +13,11 @@ const float electron_intensity = 500;       // total energy emitted per frame
 const float electron_scattering = 0.25;     // impurity of the beam
 
 // phosphor parameters
-const float phosphor_persistence = 10;      // divides how much emittance remains after one frame
+const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
 const float phosphor_reflectance_green = 0.003;
 const float phosphor_reflectance_blue = 0.003;
-const bool enable_phosphor_filter = false;
+const bool enable_phosphor_filter = true;
 // amber
 //const float phosphor_emittance_red = 1;
 //const float phosphor_emittance_green = 0.749;
@@ -28,8 +28,8 @@ const float phosphor_emittance_green = 1;
 const float phosphor_emittance_blue = 0.2;
 
 // bloom parameters
-const int bloom_kernel_diameter = 0;        // 0 to disable bloom
-const float bloom_brightness = 5;
+const int bloom_kernel_diameter = 10;       // 0 to disable bloom
+const float bloom_brightness = 15;
 const float bloom_spread = 100;
 
 // screen dimensions
@@ -104,7 +104,7 @@ struct vec2 {
     vec2 (float x = 0, float y = 0) : x (x), y (y) {}
     vec2 map () {
         // map to screen coordinates
-        return vec2 ((x + 1) * width / 2, (y + 1) * height / 2);
+        return vec2 ((x + 1) * width / 2.0, (y + 1) * height / 2.0);
     }
 };
 
@@ -305,8 +305,8 @@ void render (float time) {
         float offset_y = sin (offset_angle) * offset_radius;
 
         // calculate final dot position
-        int x = point.x + offset_x;
-        int y = point.y + offset_y;
+        float x = point.x + offset_x;
+        float y = point.y + offset_y;
         x += (center_x - x) * power_supply_out_compliment;
         y += (center_y - y) * power_supply_out_compliment;
 
@@ -322,7 +322,7 @@ void render (float time) {
             intensity -= intensity_per_electron * phosphor_decay * decay_curve;
 
         // plot the result on the electron buffer
-        electron_buffer[x + y * width] += intensity;
+        electron_buffer[int(x) + int(y) * width] += intensity;
     }
 
     // update the phosphor buffer
