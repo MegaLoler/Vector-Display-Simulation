@@ -1,5 +1,7 @@
 #include <iostream>
 #include <cmath>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 double noise () {
     return (double) rand () / RAND_MAX;
@@ -23,6 +25,7 @@ const double electron_scattering = 0.5;     // impurity of the beam
 // phosphor parameters
 const double phosphor_persistence = 10;     // divides how much emittance remains after one frame
 const double phosphor_reflectance = 0.01;   // color floor
+// TODO: define phosphor color here
 
 // bloom parameters
 const int bloom_kernel_size = 30;
@@ -114,9 +117,41 @@ void render () {
     // TODO
 }
 
+void on_resize (GLFWwindow *window, int width, int height) {
+    // TODO: allow for window resizing
+    //glViewport (0, 0, width, height);
+}
+
 int main (int argc, const char **argv) {
 
     srand (time (0));
 
+    glfwInit();
+    glfwWindowHint (GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint (GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint (GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    GLFWwindow *window = glfwCreateWindow (width, height, "Vector Display Simulator", NULL, NULL);
+    if (window == NULL) {
+        std::cerr << "Could not create GLFW window" << std::endl;
+        glfwTerminate();
+        exit (EXIT_FAILURE);
+    }
+    glfwMakeContextCurrent (window);
+
+    if (!gladLoadGLLoader ((GLADloadproc) glfwGetProcAddress)) {
+        std::cerr << "Could not initialize GLAD" << std::endl;
+        exit (EXIT_FAILURE);
+    }
+
+    glViewport(0, 0, width, height);
+    glfwSetFramebufferSizeCallback (window, on_resize);
+
+    while (!glfwWindowShouldClose (window)) {
+        glfwSwapBuffers (window);
+        glfwPollEvents ();
+    }
+
+    glfwTerminate();
     return 0;
 }
