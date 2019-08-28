@@ -3,6 +3,9 @@
 a simulation of a vector display!!!
 
 ## demo animations comparison
+
+**these need to be updated... there was a bug that caused the intensity to underflow during powerdown with the phosphor filter on**
+
 electron beam -> phosphor -> bloom
 
 ![All effects](all.gif)
