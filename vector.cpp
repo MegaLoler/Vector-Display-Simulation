@@ -91,9 +91,14 @@ struct mat4 {
       wx (wx), wy (wy), wz (wz), ww (ww)
     {}
 
-    mat4 operator * (float scalar) {
-
+    mat4 operator * (float v) {
+        return mat4 (xx * v, xy * v, xz * v, xw * v,
+                     yx * v, yy * v, yz * v, yw * v,
+                     zx * v, zy * v, zz * v, zw * v,
+                     wx * v, wy * v, wz * v, ww * v);
     }
+
+    mat4
 };
 
 // precalculations
