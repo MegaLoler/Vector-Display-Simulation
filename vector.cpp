@@ -13,10 +13,11 @@ const float electron_intensity = 500;       // total energy emitted per frame
 const float electron_scattering = 0.5;      // impurity of the beam
 
 // phosphor parameters
-const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
+const float phosphor_persistence = 10;      // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
 const float phosphor_reflectance_green = 0.003;
 const float phosphor_reflectance_blue = 0.003;
+const bool enable_phosphor_filter = false;
 // amber
 //const float phosphor_emittance_red = 1;
 //const float phosphor_emittance_green = 0.749;
@@ -27,8 +28,8 @@ const float phosphor_emittance_green = 1;
 const float phosphor_emittance_blue = 0.2;
 
 // bloom parameters
-const int bloom_kernel_diameter = 10;
-const float bloom_brightness = 10;
+const int bloom_kernel_diameter = 1;
+const float bloom_brightness = 7.5;
 const float bloom_spread = 100;
 
 // screen dimensions
@@ -315,7 +316,8 @@ void render (float time) {
         // TODO: idk a good curve, find a better one?
         float decay_curve = 1 - n * n;
         float intensity = intensity_per_electron * power_supply_out;
-        intensity -= intensity_per_electron * phosphor_decay * decay_curve;
+        if (enable_phosphor_filter)
+            intensity -= intensity_per_electron * phosphor_decay * decay_curve;
 
         // plot the result on the electron buffer
         electron_buffer[x + y * width] += intensity;
@@ -323,8 +325,10 @@ void render (float time) {
 
     // update the phosphor buffer
     for (int i = 0; i < size; i++) {
-        phosphor_buffer[i] += (electron_buffer[i] - phosphor_buffer[i]) * phosphor_decay;
-        //phosphor_buffer[i] = electron_buffer[i];
+        if (enable_phosphor_filter)
+            phosphor_buffer[i] += (electron_buffer[i] - phosphor_buffer[i]) * phosphor_decay;
+        else
+            phosphor_buffer[i] = electron_buffer[i];
     }
 
     // render the phosphor buffer with bloom filter
