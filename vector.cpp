@@ -4,34 +4,38 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-double noise () {
-    return (double) rand () / RAND_MAX;
+float noise () {
+    return (float) rand () / RAND_MAX;
 }
 
 // 2d vector representation
 struct vec2 {
-    double x;
-    double y;
-    vec2 (double x, double y) : x (x), y (y) {}
+    float x;
+    float y;
+    vec2 (float x, float y) : x (x), y (y) {}
 };
 
 // power supply parameters
-const double power_supply_smoothing = 10;   // per frame
+const float power_supply_smoothing = 10;    // per frame
 
 // electron beam parameters
 const int electron_count = 10000;           // per frame
-const double electron_intensity = 100;      // total energy emitted per frame
-const double electron_scattering = 0.5;     // impurity of the beam
+const float electron_intensity = 100;       // total energy emitted per frame
+const float electron_scattering = 0.5;      // impurity of the beam
 
 // phosphor parameters
-const double phosphor_persistence = 10;     // divides how much emittance remains after one frame
-const double phosphor_reflectance = 0.01;   // color floor
-// TODO: define phosphor color here
+const float phosphor_persistence = 10;      // divides how much emittance remains after one frame
+const float phosphor_reflectance_red = 0.005;
+const float phosphor_reflectance_green = 0.005;
+const float phosphor_reflectance_blue = 0.005;
+const float phosphor_emittance_red = 1;
+const float phosphor_emittance_green = 0.749;
+const float phosphor_emittance_blue = 0;
 
 // bloom parameters
-const int bloom_kernel_size = 30;
-const double bloom_brightness = 15;
-const double bloom_spread = 500;
+const int bloom_kernel_diameter = 30;
+const float bloom_brightness = 15;
+const float bloom_spread = 500;
 
 // screen dimensions
 // TODO: allow screen resizing
@@ -40,36 +44,57 @@ const int height = 360;
 const int size = width * height;
 
 // precalculations
-const double intensity_per_electron = electron_intensity / electron_count;
-const double electron_delta = 1.0 / electron_count;
-const double phosphor_decay = 1.0 / (1 + phosphor_persistence);
-const double power_supply_decay = 1.0 / (1 + power_supply_smoothing);
+const float intensity_per_electron = electron_intensity / electron_count;
+const float electron_delta = 1.0 / electron_count;
+const float phosphor_decay = 1.0 / (1 + phosphor_persistence);
+const float power_supply_decay = 1.0 / (1 + power_supply_smoothing);
+const int bloom_kernel_radius = bloom_kernel_diameter / 2;
+const int bloom_kernel_size = bloom_kernel_diameter * bloom_kernel_diameter;
+const float center_x = width / 2.0;
+const float center_y = height / 2.0;
 
 // state variables
-double power_supply_in = 1;     // power input; 1 = normal, 0 = off
-double power_supply_out = 0;    // smoothed output of power supply
+float power_supply_in = 1;     // power input; 1 = normal, 0 = off
+float power_supply_out = 0;    // smoothed output of power supply
 
 // electron buffer
 // new electrons hitting the screen
 // adjusted for decay after time hit between current and last frame
-double electron_buffer[size];
+float electron_buffer[size];
 
 // phosphor buffer
 // total emittance of phosphor at each pixel
-double phosphor_buffer[size];
+float phosphor_buffer[size];
+
+// convolution kernel for bloom shader
+float kernel[bloom_kernel_size];
 
 // opengl stuff
 GLuint vbo, vao, program;
+GLuint phosphor_texture;
 
 // sample the path for the electron beam to trace per frame
 // 0 <= n <= 1
-vec2 sample_path (double n) {
+vec2 sample_path (float n) {
     //TMP circle
-    const double r = 20;
-    const double x = 100;
-    const double y = 100;
-    double a = n * M_PI * 2;
+    const float r = 20;
+    const float x = 100;
+    const float y = 100;
+    float a = n * M_PI * 2;
     return vec2 (cos (a) * r + x, sin (a) * r + y);
+}
+
+// generate the convolution kernel to pass to the bloom shader
+void generate_kernel () {
+    for (int i = 0; i < bloom_kernel_size; i++) {
+        float x = i % bloom_kernel_diameter;
+        float y = i / bloom_kernel_diameter;
+        float offset_x = x - bloom_kernel_radius;
+        float offset_y = y - bloom_kernel_radius;
+        float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
+        float value = pow (radius, 1.0 / bloom_spread);
+        kernel[i] = fmax (0, 1 - value);
+    }
 }
 
 void render () {
@@ -79,23 +104,26 @@ void render () {
     // update the power supply
     // TODO: integrate power supply out per electron instead of per frame for more accuracy
     power_supply_out += (power_supply_in - power_supply_out) * power_supply_decay;
+    float power_supply_out_compliment = 1 - power_supply_out;
 
     // prepare the electron buffer
     std::fill_n (electron_buffer, size, 0); // clear it first
-    for (double n = 0; n < 1; n += electron_delta) {
+    for (float n = 0; n < 1; n += electron_delta) {
 
         // sample the ideal point on the path to be traced
         vec2 point = sample_path (n);
 
         // calculate random scattering
-        double offset_radius = tan (noise () * 2) * electron_scattering;
-        double offset_angle = noise() * M_PI * 2;
-        double offset_x = cos (offset_angle) * offset_radius;
-        double offset_y = sin (offset_angle) * offset_radius;
+        float offset_radius = tan (noise () * 2) * electron_scattering;
+        float offset_angle = noise() * M_PI * 2;
+        float offset_x = cos (offset_angle) * offset_radius;
+        float offset_y = sin (offset_angle) * offset_radius;
 
         // calculate final dot position
-        int x = (point.x + offset_x) * power_supply_out;
-        int y = (point.y + offset_y) * power_supply_out;
+        int x = point.x + offset_x;
+        int y = point.y + offset_y;
+        x += (center_x - x) * power_supply_out_compliment;
+        y += (center_y - y) * power_supply_out_compliment;
 
         // clip
         if (x < 0 || y < 0 || x >= width || y >= height)
@@ -103,8 +131,8 @@ void render () {
 
         // calculate intensity and adjust for decay at this time
         // TODO: idk a good curve, find a better one?
-        double decay_curve = 1 - n * n;
-        double intensity = intensity_per_electron * power_supply_out;
+        float decay_curve = 1 - n * n;
+        float intensity = intensity_per_electron * power_supply_out;
         intensity -= intensity_per_electron * phosphor_decay * decay_curve;
 
         // plot the result on the electron buffer
@@ -119,6 +147,7 @@ void render () {
 
     // render the phosphor buffer with bloom filter
     // TODO: write shaders
+    glTexImage2D (GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_FLOAT, phosphor_buffer);
     glUseProgram (program);
     glBindVertexArray (vao);
     glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
@@ -133,20 +162,26 @@ std::string read_file (const char *filename) {
 }
 
 void init_opengl () {
-    // create the full screen quad
     float vertices[] = {
         -1, -1,
         1, -1,
         -1, 1,
         1, 1,
     };
-    glGenBuffers (1, &vbo);
     glGenVertexArrays (1, &vao);
     glBindVertexArray (vao);
+
+    glGenBuffers (1, &vbo);
     glBindBuffer (GL_ARRAY_BUFFER, vbo);
     glBufferData (GL_ARRAY_BUFFER, sizeof (vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof (float), (void *) 0);
-    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer (0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof (float), (void *) 0);
+    glEnableVertexAttribArray (0);
+
+    glGenTextures (1, &phosphor_texture);
+    glBindTexture (GL_TEXTURE_2D, phosphor_texture);
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
     glBindVertexArray (0);
 
     // compile shaders
@@ -173,7 +208,7 @@ void init_opengl () {
     glGetShaderiv (fragment_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog (fragment_shader, log_size, NULL, log);
-        std::cerr << "Could not compile vertex shader:\n" << log << std::endl;
+        std::cerr << "Could not compile fragment shader:\n" << log << std::endl;
         exit (EXIT_FAILURE);
     }
 
@@ -190,6 +225,13 @@ void init_opengl () {
     }
     glDeleteShader (vertex_shader);
     glDeleteShader (fragment_shader);
+
+    // set parameters
+    glUseProgram (program);
+    glUniform1i (glGetUniformLocation (program, "kernel_diameter"), bloom_kernel_diameter);
+    glUniform1f (glGetUniformLocation (program, "brightness"), bloom_brightness);
+    glUniform3f (glGetUniformLocation (program, "reflectance"), phosphor_reflectance_red, phosphor_reflectance_green, phosphor_reflectance_blue);
+    glUniform3f (glGetUniformLocation (program, "emittance"), phosphor_emittance_red, phosphor_emittance_green, phosphor_emittance_blue);
 }
 
 void on_resize (GLFWwindow *window, int width, int height) {
