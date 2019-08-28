@@ -25,17 +25,22 @@ const float electron_scattering = 0.5;      // impurity of the beam
 
 // phosphor parameters
 const float phosphor_persistence = 10;      // divides how much emittance remains after one frame
-const float phosphor_reflectance_red = 0.005;
-const float phosphor_reflectance_green = 0.005;
-const float phosphor_reflectance_blue = 0.005;
-const float phosphor_emittance_red = 1;
-const float phosphor_emittance_green = 0.749;
+const float phosphor_reflectance_red = 0.003;
+const float phosphor_reflectance_green = 0.003;
+const float phosphor_reflectance_blue = 0.003;
+// amber
+//const float phosphor_emittance_red = 1;
+//const float phosphor_emittance_green = 0.749;
+//const float phosphor_emittance_blue = 0;
+// green
+const float phosphor_emittance_red = 0.2;
+const float phosphor_emittance_green = 1;
 const float phosphor_emittance_blue = 0;
 
 // bloom parameters
-const int bloom_kernel_diameter = 30;
-const float bloom_brightness = 15;
-const float bloom_spread = 500;
+const int bloom_kernel_diameter = 10;
+const float bloom_brightness = 10;
+const float bloom_spread = 100;
 
 // screen dimensions
 // TODO: allow screen resizing
@@ -71,15 +76,15 @@ float kernel[bloom_kernel_size];
 
 // opengl stuff
 GLuint vbo, vao, program;
-GLuint phosphor_texture;
+GLuint phosphor_texture, kernel_texture;
 
 // sample the path for the electron beam to trace per frame
 // 0 <= n <= 1
 vec2 sample_path (float n) {
     //TMP circle
-    const float r = 20;
-    const float x = 100;
-    const float y = 100;
+    const float r = 100;
+    const float x = 200;
+    const float y = 200;
     float a = n * M_PI * 2;
     return vec2 (cos (a) * r + x, sin (a) * r + y);
 }
@@ -140,14 +145,17 @@ void render () {
     }
 
     // update the phosphor buffer
-    // TODO: convert to shader for speed
     for (int i = 0; i < size; i++) {
         phosphor_buffer[i] += (electron_buffer[i] - phosphor_buffer[i]) * phosphor_decay;
     }
 
     // render the phosphor buffer with bloom filter
     // TODO: write shaders
+    glActiveTexture(GL_TEXTURE0 + 0);
+    glBindTexture (GL_TEXTURE_2D, phosphor_texture);
     glTexImage2D (GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_FLOAT, phosphor_buffer);
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture (GL_TEXTURE_2D, kernel_texture);
     glUseProgram (program);
     glBindVertexArray (vao);
     glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
@@ -168,6 +176,7 @@ void init_opengl () {
         -1, 1,
         1, 1,
     };
+
     glGenVertexArrays (1, &vao);
     glBindVertexArray (vao);
 
@@ -181,6 +190,11 @@ void init_opengl () {
     glGenTextures (1, &phosphor_texture);
     glBindTexture (GL_TEXTURE_2D, phosphor_texture);
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glGenTextures (1, &kernel_texture);
+    glBindTexture (GL_TEXTURE_2D, kernel_texture);
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexImage2D (GL_TEXTURE_2D, 0, GL_RED, bloom_kernel_diameter, bloom_kernel_diameter, 0, GL_RED, GL_FLOAT, kernel);
 
     glBindVertexArray (0);
 
@@ -232,6 +246,11 @@ void init_opengl () {
     glUniform1f (glGetUniformLocation (program, "brightness"), bloom_brightness);
     glUniform3f (glGetUniformLocation (program, "reflectance"), phosphor_reflectance_red, phosphor_reflectance_green, phosphor_reflectance_blue);
     glUniform3f (glGetUniformLocation (program, "emittance"), phosphor_emittance_red, phosphor_emittance_green, phosphor_emittance_blue);
+
+    glUniform1i (glGetUniformLocation (program, "source"), 0);
+    glUniform1i (glGetUniformLocation (program, "kernel"), 1);
+
+    glUniform2f (glGetUniformLocation (program, "resolution"), width, height);
 }
 
 void on_resize (GLFWwindow *window, int width, int height) {
@@ -246,6 +265,7 @@ void process_input (GLFWwindow *window) {
 
 int main (int argc, const char **argv) {
 
+    generate_kernel ();
     srand (time (0));
 
     glfwInit();
