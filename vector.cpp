@@ -135,17 +135,17 @@ std::string read_file (const char *filename) {
 void init_opengl () {
     // create the full screen quad
     float vertices[] = {
-        0, 0,
-        width, 0,
-        0, height,
-        width, height,
+        -1, -1,
+        1, -1,
+        -1, 1,
+        1, 1,
     };
+    glGenBuffers (1, &vbo);
     glGenVertexArrays (1, &vao);
     glBindVertexArray (vao);
-    glGenBuffers (1, &vbo);
     glBindBuffer (GL_ARRAY_BUFFER, vbo);
     glBufferData (GL_ARRAY_BUFFER, sizeof (vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof (float), (void *) 0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof (float), (void *) 0);
     glEnableVertexAttribArray(0);
     glBindVertexArray (0);
 
@@ -231,6 +231,7 @@ int main (int argc, const char **argv) {
 
     while (!glfwWindowShouldClose (window)) {
         process_input (window);
+        render ();
         glfwSwapBuffers (window);
         glfwPollEvents ();
     }
