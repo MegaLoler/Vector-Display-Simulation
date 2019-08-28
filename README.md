@@ -21,6 +21,3 @@ electron beam -> bloom; no phosphor
 
 ![No hhosphor](bloom.gif)
 
-## old animation and screenshot
-![animation](demo.gif)
-![screenshot](screeny.png)
