@@ -122,6 +122,11 @@ void on_resize (GLFWwindow *window, int width, int height) {
     //glViewport (0, 0, width, height);
 }
 
+void process_input (GLFWwindow *window) {
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose (window, true);
+}
+
 int main (int argc, const char **argv) {
 
     srand (time (0));
@@ -148,6 +153,7 @@ int main (int argc, const char **argv) {
     glfwSetFramebufferSizeCallback (window, on_resize);
 
     while (!glfwWindowShouldClose (window)) {
+        process_input (window);
         glfwSwapBuffers (window);
         glfwPollEvents ();
     }
