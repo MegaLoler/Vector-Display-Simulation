@@ -324,10 +324,10 @@ void render (float time) {
     // update the phosphor buffer
     for (int i = 0; i < size; i++) {
         phosphor_buffer[i] += (electron_buffer[i] - phosphor_buffer[i]) * phosphor_decay;
+        //phosphor_buffer[i] = electron_buffer[i];
     }
 
     // render the phosphor buffer with bloom filter
-    // TODO: write shaders
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture (GL_TEXTURE_2D, phosphor_texture);
     glTexImage2D (GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_FLOAT, phosphor_buffer);
