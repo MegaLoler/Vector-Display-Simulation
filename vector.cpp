@@ -9,11 +9,11 @@ const float power_supply_smoothing = 10;    // per frame
 
 // electron beam parameters
 const int electron_count = 10000;           // per frame
-const float electron_intensity = 100;       // total energy emitted per frame
+const float electron_intensity = 500;       // total energy emitted per frame
 const float electron_scattering = 0.5;      // impurity of the beam
 
 // phosphor parameters
-const float phosphor_persistence = 10;      // divides how much emittance remains after one frame
+const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
 const float phosphor_reflectance_green = 0.003;
 const float phosphor_reflectance_blue = 0.003;
@@ -36,28 +36,6 @@ const float bloom_spread = 100;
 const int width = 480;
 const int height = 360;
 const int size = width * height;
-
-// 2d vector representation
-struct vec2 {
-    float x;
-    float y;
-    vec2 (float x = 0, float y = 0) : x (x), y (y) {}
-    vec2 map () {
-        // map to screen coordinates
-        return vec2 ((x + 1) * width / 2, (y + 1) * height / 2);
-    }
-};
-
-// 3d vector representation
-struct vec3 {
-    float x;
-    float y;
-    float z;
-    vec3 (float x = 0, float y = 0, float z = 0) : x (x), y (y), z (z) {}
-    vec2 project () {
-        return vec2 (x / (z + 1), y / (z + 1));
-    }
-};
 
 // 4x4 matrix representation
 struct mat4 {
@@ -91,8 +69,61 @@ struct mat4 {
       wx (wx), wy (wy), wz (wz), ww (ww)
     {}
 
-    mat4 operator * (mat4 matrix) {
-        // TODO
+    mat4 operator * (mat4 m) {
+        mat4 result;
+
+        result.xx = xx * m.xx + yx * m.xy + zx * m.xz + wx * m.xw;
+        result.xy = xy * m.xx + yy * m.xy + zy * m.xz + wy * m.xw;
+        result.xz = xz * m.xx + yz * m.xy + zz * m.xz + wz * m.xw;
+        result.xw = xw * m.xx + yw * m.xy + zw * m.xz + ww * m.xw;
+
+        result.yx = xx * m.yx + yx * m.yy + zx * m.yz + wx * m.yw;
+        result.yy = xy * m.yx + yy * m.yy + zy * m.yz + wy * m.yw;
+        result.yz = xz * m.yx + yz * m.yy + zz * m.yz + wz * m.yw;
+        result.yw = xw * m.yx + yw * m.yy + zw * m.yz + ww * m.yw;
+
+        result.zx = xx * m.zx + yx * m.zy + zx * m.zz + wx * m.zw;
+        result.zy = xy * m.zx + yy * m.zy + zy * m.zz + wy * m.zw;
+        result.zz = xz * m.zx + yz * m.zy + zz * m.zz + wz * m.zw;
+        result.zw = xw * m.zx + yw * m.zy + zw * m.zz + ww * m.zw;
+
+        result.wx = xx * m.wx + yx * m.wy + zx * m.wz + wx * m.ww;
+        result.wy = xy * m.wx + yy * m.wy + zy * m.wz + wy * m.ww;
+        result.wz = xz * m.wx + yz * m.wy + zz * m.wz + wz * m.ww;
+        result.ww = xw * m.wx + yw * m.wy + zw * m.wz + ww * m.ww;
+
+        return result;
+    }
+};
+
+// 2d vector representation
+struct vec2 {
+    float x;
+    float y;
+    vec2 (float x = 0, float y = 0) : x (x), y (y) {}
+    vec2 map () {
+        // map to screen coordinates
+        return vec2 ((x + 1) * width / 2, (y + 1) * height / 2);
+    }
+};
+
+// 3d vector representation
+struct vec3 {
+    float x;
+    float y;
+    float z;
+    vec3 (float x = 0, float y = 0, float z = 0) : x (x), y (y), z (z) {}
+    vec2 project () {
+        return vec2 (x / (z + 1), y / (z + 1));
+    }
+    vec3 operator * (mat4 m) {
+        vec3 result;
+
+        result.x = x * m.xx + y * m.xy + z * m.xz;
+        result.y = x * m.yx + y * m.yy + z * m.yz;
+        result.z = x * m.zx + y * m.zy + z * m.zz;
+
+        return result;
     }
 };
 
@@ -192,19 +223,20 @@ void prepare_path (float time) {
     // rotating cube
 
     // normal vertices
-    const vec3 p000 = vec3 (-1, -1, -1);
-    const vec3 p001 = vec3 (-1, -1, 1);
-    const vec3 p010 = vec3 (-1, 1, -1);
-    const vec3 p011 = vec3 (-1, 1, 1);
-    const vec3 p100 = vec3 (1, -1, -1);
-    const vec3 p101 = vec3 (1, -1, 1);
-    const vec3 p110 = vec3 (1, 1, -1);
-    const vec3 p111 = vec3 (1, 1, 1);
+    vec3 p000 = vec3 (-1, -1, -1);
+    vec3 p001 = vec3 (-1, -1, 1);
+    vec3 p010 = vec3 (-1, 1, -1);
+    vec3 p011 = vec3 (-1, 1, 1);
+    vec3 p100 = vec3 (1, -1, -1);
+    vec3 p101 = vec3 (1, -1, 1);
+    vec3 p110 = vec3 (1, 1, -1);
+    vec3 p111 = vec3 (1, 1, 1);
 
     // transformed vertices
-    mat4 transform = mat4 () * 0.25;
-    float angle = time * M_PI * 2;
-    transform = transform.rotate (angle, angle);
+    mat4 transform = mat4 () * scale (0.3, 0.3, 0.3);
+    float angle = time * M_PI * 2 / 8;
+    transform = transform * rotate_y (angle);
+    transform = transform * rotate_x (angle);
     vec3 p000_ = p000 * transform;
     vec3 p001_ = p001 * transform;
     vec3 p010_ = p010 * transform;
@@ -408,6 +440,11 @@ void process_input (GLFWwindow *window) {
         glfwSetWindowShouldClose (window, true);
 }
 
+void on_keyboard (GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+        power_supply_in = !power_supply_in;
+}
+
 int main (int argc, const char **argv) {
 
     generate_kernel ();
@@ -431,8 +468,9 @@ int main (int argc, const char **argv) {
         exit (EXIT_FAILURE);
     }
 
-    glViewport(0, 0, width, height);
+    glViewport (0, 0, width, height);
     glfwSetFramebufferSizeCallback (window, on_resize);
+    glfwSetKeyCallback (window, on_keyboard);
 
     init_opengl ();
 
