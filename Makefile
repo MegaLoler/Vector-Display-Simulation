@@ -3,7 +3,7 @@ vector: vector.cpp
 
 .PHONY:
 run: vector
-	./vector
+	MESA_GL_VERSION_OVERRIDE=3.3 ./vector
 
 .PHONY:
 clean:

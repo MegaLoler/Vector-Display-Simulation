@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -57,6 +58,9 @@ double electron_buffer[size];
 // total emittance of phosphor at each pixel
 double phosphor_buffer[size];
 
+// opengl stuff
+GLuint vbo, vao, program;
+
 // sample the path for the electron beam to trace per frame
 // 0 <= n <= 1
 vec2 sample_path (double n) {
@@ -114,7 +118,78 @@ void render () {
     }
 
     // render the phosphor buffer with bloom filter
-    // TODO
+    // TODO: write shaders
+    glUseProgram (program);
+    glBindVertexArray (vao);
+    glDrawArrays (GL_TRIANGLE_STRIP, 0, 4);
+}
+
+std::string read_file (const char *filename) {
+    // https://stackoverflow.com/questions/18398167/how-to-copy-a-txt-file-to-a-char-array-in-c
+    std::ifstream in (filename);
+    std::string contents ((std::istreambuf_iterator <char> (in)),
+            std::istreambuf_iterator <char> ());
+    return contents;
+}
+
+void init_opengl () {
+    // create the full screen quad
+    float vertices[] = {
+        0, 0,
+        width, 0,
+        0, height,
+        width, height,
+    };
+    glGenVertexArrays (1, &vao);
+    glBindVertexArray (vao);
+    glGenBuffers (1, &vbo);
+    glBindBuffer (GL_ARRAY_BUFFER, vbo);
+    glBufferData (GL_ARRAY_BUFFER, sizeof (vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof (float), (void *) 0);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray (0);
+
+    // compile shaders
+    GLuint vertex_shader, fragment_shader;
+    int success;
+    const int log_size = 512;
+    char log[log_size];
+    std::string vertex_shader_source_string = read_file ("shader.vert");
+    std::string fragment_shader_source_string = read_file ("shader.frag");
+    const char *vertex_shader_source = vertex_shader_source_string.c_str ();
+    const char *fragment_shader_source = fragment_shader_source_string.c_str ();
+    vertex_shader = glCreateShader (GL_VERTEX_SHADER);
+    fragment_shader = glCreateShader (GL_FRAGMENT_SHADER);
+    glShaderSource (vertex_shader, 1, &vertex_shader_source, NULL);
+    glShaderSource (fragment_shader, 1, &fragment_shader_source, NULL);
+    glCompileShader (vertex_shader);
+    glCompileShader (fragment_shader);
+    glGetShaderiv (vertex_shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog (vertex_shader, log_size, NULL, log);
+        std::cerr << "Could not compile vertex shader:\n" << log << std::endl;
+        exit (EXIT_FAILURE);
+    }
+    glGetShaderiv (fragment_shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog (fragment_shader, log_size, NULL, log);
+        std::cerr << "Could not compile vertex shader:\n" << log << std::endl;
+        exit (EXIT_FAILURE);
+    }
+
+    // create shader program
+    program = glCreateProgram ();
+    glAttachShader (program, vertex_shader);
+    glAttachShader (program, fragment_shader);
+    glLinkProgram (program);
+    glGetProgramiv (program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog (program, log_size, NULL, log);
+        std::cerr << "Could not link shader program:\n" << log << std::endl;
+        exit (EXIT_FAILURE);
+    }
+    glDeleteShader (vertex_shader);
+    glDeleteShader (fragment_shader);
 }
 
 void on_resize (GLFWwindow *window, int width, int height) {
@@ -151,6 +226,8 @@ int main (int argc, const char **argv) {
 
     glViewport(0, 0, width, height);
     glfwSetFramebufferSizeCallback (window, on_resize);
+
+    init_opengl ();
 
     while (!glfwWindowShouldClose (window)) {
         process_input (window);
