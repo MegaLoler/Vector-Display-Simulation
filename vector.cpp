@@ -81,25 +81,40 @@ struct mat4 {
     float wz;
     float ww;
 
-    mat4 (float xx, float xy, float xz, float xw,
-          float yx, float yy, float yz, float yw,
-          float zx, float zy, float zz, float zw,
-          float wx, float wy, float wz, float ww)
+    mat4 (float xx = 1, float xy = 0, float xz = 0, float xw = 0,
+          float yx = 0, float yy = 1, float yz = 0, float yw = 0,
+          float zx = 0, float zy = 0, float zz = 1, float zw = 0,
+          float wx = 0, float wy = 0, float wz = 0, float ww = 1)
     : xx (xx), xy (xy), xz (xz), xw (xw),
       yx (yx), yy (yy), yz (yz), yw (yw),
       zx (zx), zy (zy), zz (zz), zw (zw),
       wx (wx), wy (wy), wz (wz), ww (ww)
     {}
 
-    mat4 operator * (float v) {
-        return mat4 (xx * v, xy * v, xz * v, xw * v,
-                     yx * v, yy * v, yz * v, yw * v,
-                     zx * v, zy * v, zz * v, zw * v,
-                     wx * v, wy * v, wz * v, ww * v);
+    mat4 operator * (mat4 matrix) {
+        // TODO
     }
-
-    mat4
 };
+
+mat4 scale (float x, float y, float z) {
+    return mat4 (x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1);
+}
+
+mat4 translate (float x, float y, float z) {
+    return mat4 (1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1);
+}
+
+mat4 rotate_z (float angle) {
+    return mat4 (cos (angle), -sin (angle), 0, 1, sin (angle), cos (angle), 0, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+}
+
+mat4 rotate_y (float angle) {
+    return mat4 (cos (angle), 0, sin (angle), 0, 0, 1, 0, 0, -sin (angle), 0, cos (angle), 0, 0, 0, 0, 1);
+}
+
+mat4 rotate_x (float angle) {
+    return mat4 (1, 0, 0, 0, 0, cos (angle), -sin (angle), 0, 0, sin (angle), cos (angle), 0, 0, 0, 0, 1);
+}
 
 // precalculations
 const float intensity_per_electron = electron_intensity / electron_count;
