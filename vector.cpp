@@ -4,28 +4,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-float noise () {
-    return (float) rand () / RAND_MAX;
-}
-
-// 2d vector representation
-struct vec2 {
-    float x;
-    float y;
-    vec2 (float x = 0, float y = 0) : x (x), y (y) {}
-};
-
-// 3d vector representation
-struct vec3 {
-    float x;
-    float y;
-    float z;
-    vec3 (float x = 0, float y = 0, float z = 0) : x (x), y (y), z (z) {}
-    vec2 project () {
-        return vec2 (x / z, y / z);
-    }
-};
-
 // power supply parameters
 const float power_supply_smoothing = 10;    // per frame
 
@@ -58,6 +36,65 @@ const float bloom_spread = 100;
 const int width = 480;
 const int height = 360;
 const int size = width * height;
+
+// 2d vector representation
+struct vec2 {
+    float x;
+    float y;
+    vec2 (float x = 0, float y = 0) : x (x), y (y) {}
+    vec2 map () {
+        // map to screen coordinates
+        return vec2 ((x + 1) * width / 2, (y + 1) * height / 2);
+    }
+};
+
+// 3d vector representation
+struct vec3 {
+    float x;
+    float y;
+    float z;
+    vec3 (float x = 0, float y = 0, float z = 0) : x (x), y (y), z (z) {}
+    vec2 project () {
+        return vec2 (x / (z + 1), y / (z + 1));
+    }
+};
+
+// 4x4 matrix representation
+struct mat4 {
+    float xx;
+    float xy;
+    float xz;
+    float xw;
+
+    float yx;
+    float yy;
+    float yz;
+    float yw;
+
+    float zx;
+    float zy;
+    float zz;
+    float zw;
+
+    float wx;
+    float wy;
+    float wz;
+    float ww;
+
+    mat4 (float xx, float xy, float xz, float xw,
+          float yx, float yy, float yz, float yw,
+          float zx, float zy, float zz, float zw,
+          float wx, float wy, float wz, float ww)
+    : xx (xx), xy (xy), xz (xz), xw (xw),
+      yx (yx), yy (yy), yz (yz), yw (yw),
+      zx (zx), zy (zy), zz (zz), zw (zw),
+      wx (wx), wy (wy), wz (wz), ww (ww)
+    {}
+
+    mat4 operator * (float scalar) {
+
+    }
+};
 
 // precalculations
 const float intensity_per_electron = electron_intensity / electron_count;
@@ -93,22 +130,27 @@ int vertex_count = 0;
 GLuint vbo, vao, program;
 GLuint phosphor_texture, kernel_texture;
 
+float noise () {
+    return (float) rand () / RAND_MAX;
+}
+
 // sample the path for the electron beam to trace per frame
 // project to 2d
 // 0 <= n <= 1
 vec2 sample_path (float n) {
     if (vertex_count == 0)
-        return vec2 (center_x, center_y);
+        return vec2 ().map ();
     else if (vertex_count == 1)
-        return path[0].project ();
+        return path[0].project ().map ();
 
-    double n2 = n * (vertex_count - 1);
+    float n2 = n * (vertex_count / 2);
     int i = floor (n2);
     n = n2 - i;
+    i *= 2;
     vec3 p1 = path[i];
     vec3 p2 = path[i + 1];
-    vec3 delta = vec3 ((p2.x - p1.x) * n, (p2.y - p1.y) * n);
-    return vec3 (p1.x + delta.x, p1.y + delta.y).project ();
+    vec3 delta = vec3 ((p2.x - p1.x) * n, (p2.y - p1.y) * n, (p2.z - p1.z) * n);
+    return vec3 (p1.x + delta.x, p1.y + delta.y, p1.z + delta.z).project ().map ();
 }
 
 // generate the convolution kernel to pass to the bloom shader
@@ -124,9 +166,69 @@ void generate_kernel () {
     }
 }
 
-void render () {
+void prepare_path (float time) {
+    vertex_count = 0;
+
+    // rotating cube
+
+    // normal vertices
+    const vec3 p000 = vec3 (-1, -1, -1);
+    const vec3 p001 = vec3 (-1, -1, 1);
+    const vec3 p010 = vec3 (-1, 1, -1);
+    const vec3 p011 = vec3 (-1, 1, 1);
+    const vec3 p100 = vec3 (1, -1, -1);
+    const vec3 p101 = vec3 (1, -1, 1);
+    const vec3 p110 = vec3 (1, 1, -1);
+    const vec3 p111 = vec3 (1, 1, 1);
+
+    // transformed vertices
+    mat4 transform = mat4 () * 0.25;
+    float angle = time * M_PI * 2;
+    transform = transform.rotate (angle, angle);
+    vec3 p000_ = p000 * transform;
+    vec3 p001_ = p001 * transform;
+    vec3 p010_ = p010 * transform;
+    vec3 p011_ = p011 * transform;
+    vec3 p100_ = p100 * transform;
+    vec3 p101_ = p101 * transform;
+    vec3 p110_ = p110 * transform;
+    vec3 p111_ = p111 * transform;
+
+    // edges
+    path[vertex_count++] = p000_;
+    path[vertex_count++] = p001_;
+    path[vertex_count++] = p010_;
+    path[vertex_count++] = p011_;
+    path[vertex_count++] = p100_;
+    path[vertex_count++] = p101_;
+    path[vertex_count++] = p110_;
+    path[vertex_count++] = p111_;
+
+    path[vertex_count++] = p000_;
+    path[vertex_count++] = p010_;
+    path[vertex_count++] = p001_;
+    path[vertex_count++] = p011_;
+    path[vertex_count++] = p100_;
+    path[vertex_count++] = p110_;
+    path[vertex_count++] = p101_;
+    path[vertex_count++] = p111_;
+
+    path[vertex_count++] = p000_;
+    path[vertex_count++] = p100_;
+    path[vertex_count++] = p001_;
+    path[vertex_count++] = p101_;
+    path[vertex_count++] = p010_;
+    path[vertex_count++] = p110_;
+    path[vertex_count++] = p011_;
+    path[vertex_count++] = p111_;
+}
+
+void render (float time) {
 
     // TODO: make unit time 1 second and incorporate variable delta time
+
+    // create the path to trace
+    prepare_path (time);
 
     // prepare the electron buffer
     std::fill_n (electron_buffer, size, 0); // clear it first
@@ -138,6 +240,8 @@ void render () {
 
         // sample the ideal point on the path to be traced
         vec2 point = sample_path (n);
+
+        // TODO: add electron gun inertia for curving and overshoots
 
         // calculate random scattering
         float offset_radius = tan (noise () * 2) * electron_scattering;
@@ -314,7 +418,7 @@ int main (int argc, const char **argv) {
 
     while (!glfwWindowShouldClose (window)) {
         process_input (window);
-        render ();
+        render (glfwGetTime ());
         glfwSwapBuffers (window);
         glfwPollEvents ();
     }
