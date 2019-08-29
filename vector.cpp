@@ -9,7 +9,7 @@
 // simulation mode
 // color crt mode simulates a color crt that draws scanlines
 // other mode is monochrome vector display
-const bool color_crt_mode = false;
+const bool color_crt_mode = true;
 const bool shadow_mask = false;
 const bool electron_guide = true;           // minimize lost electrons
 
@@ -22,7 +22,7 @@ const float power_supply_smoothing = color_crt_mode ? 0 : 3;    // per frame
 
 // electron beam parameters
 const int electron_count = color_crt_mode ? 120000 : 40000;           // per frame
-const float electron_intensity = color_crt_mode ? (shadow_mask ? 48000 : 12000) : 500;       // total energy emitted per frame
+const float electron_intensity = color_crt_mode ? (shadow_mask ? 48000 : 24000) : 500;       // total energy emitted per frame
 const float electron_scattering = color_crt_mode ? 0.05 : 0.25;     // impurity of the beam
 
 // phosphor parameters
@@ -227,6 +227,8 @@ float noise () {
 // project to 2d
 // 0 <= n <= 1
 // TODO: add bezier smoothing or something
+// TODO: vblank simulation in color crt mode
+// TODO: phase drift
 vec2 sample_path (float n) {
     if (vertex_count == 0)
         return vec2 ().map ();
