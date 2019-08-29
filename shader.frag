@@ -26,7 +26,7 @@ vec3 sample_phosphor (vec2 position) {
 }
 
 float sample_kernel (vec2 position) {
-    return texture (kernel, position / kernel_diameter).r;
+    return texture (kernel, position / (kernel_diameter - 1)).r;
 }
 
 void main () {

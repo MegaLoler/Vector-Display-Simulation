@@ -29,6 +29,14 @@ const float phosphor_reflectance_blue = 0.003;
 const float phosphor_emittance_red = 0.2;
 const float phosphor_emittance_green = 1;
 const float phosphor_emittance_blue = 0.2;
+// red?
+//const float phosphor_emittance_red = 1;
+//const float phosphor_emittance_green = 0.2;
+//const float phosphor_emittance_blue = 0.2;
+// blue?
+//const float phosphor_emittance_red = 0.2;
+//const float phosphor_emittance_green = 0.2;
+//const float phosphor_emittance_blue = 1;
 
 // bloom parameters
 const int bloom_kernel_diameter = 10;       // 0 to disable bloom
@@ -216,16 +224,14 @@ vec2 sample_path (float n) {
 
 // generate the convolution kernel to pass to the bloom shader
 void generate_kernel () {
-    if (bloom_kernel_diameter > 0) {
-        for (int i = 0; i < bloom_kernel_size; i++) {
-            float x = i % bloom_kernel_diameter;
-            float y = i / bloom_kernel_diameter;
-            float offset_x = x - bloom_kernel_radius;
-            float offset_y = y - bloom_kernel_radius;
-            float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
-            float value = pow (radius, 1.0 / bloom_spread);
-            kernel[i] = fmax (0, 1 - value);
-        }
+    for (int i = 0; i < bloom_kernel_size; i++) {
+        float x = i % bloom_kernel_diameter;
+        float y = i / bloom_kernel_diameter;
+        float offset_x = x - bloom_kernel_radius;
+        float offset_y = y - bloom_kernel_radius;
+        float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
+        float value = pow (radius, 1.0 / bloom_spread);
+        kernel[i] = fmax (0, 1 - value);
     }
 }
 
