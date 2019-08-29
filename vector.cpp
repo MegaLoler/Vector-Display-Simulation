@@ -3,21 +3,28 @@
 #include <cmath>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+// simulation mode
+// color crt mode simulates a color crt that draws scanlines
+// other mode is monochrome vector display
+const bool color_crt_mode = true;
+const bool shadow_mask = true;
 
 // drawing parameters
-const bool light_pen_mode = false;          // follows mouse cursor instead of drawing rotating cube
+const bool light_pen_mode = false;           // follows mouse cursor instead of drawing rotating cube
+const float drawing_jitter = color_crt_mode ? 0.00001 : 0;
 
 // power supply parameters
-const float power_supply_smoothing = 10;    // per frame
+const float power_supply_smoothing = color_crt_mode ? 0 : 3;    // per frame
 
 // electron beam parameters
-const int electron_count = 20000;           // per frame
-const float electron_intensity = 500;       // total energy emitted per frame
+const int electron_count = color_crt_mode ? 80000 : 40000;           // per frame
+const float electron_intensity = color_crt_mode ? (shadow_mask ? 24000 : 2000) : 500;       // total energy emitted per frame
 const float electron_scattering = 0.25;     // impurity of the beam
 
 // phosphor parameters
-const bool color_crt_mode = false;           // false simulates monochrome vector display
-                                            // true simulates color crt with scanlines
 const bool enable_phosphor_filter = true;
 const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
@@ -47,8 +54,8 @@ const float bloom_spread = 100;
 
 // screen dimensions
 // TODO: allow screen resizing
-const int width = 480;
-const int height = 360;
+const int width = 256 * 3;
+const int height = 144 * 4;
 const int size = width * height;
 
 // 4x4 matrix representation
@@ -173,8 +180,12 @@ const float center_x = width / 2.0;
 const float center_y = height / 2.0;
 
 // state variables
-float power_supply_in = 1;     // power input; 1 = normal, 0 = off
-float power_supply_out = 0;    // smoothed output of power supply
+float power_supply_in = 1;      // power input; 1 = normal, 0 = off
+float power_supply_out = 0;     // smoothed output of power supply
+float color_red = 1;            // current value for red beam
+float color_green = 1;          // current value for red beam
+float color_blue = 1;           // current value for red beam
+int frame = 0;                  // the frame counter
 
 // normalized mouse coordinates
 vec2 mouse;
@@ -196,6 +207,9 @@ float color_mask[size * 3];
 // convolution kernel for bloom shader
 float kernel[bloom_kernel_size];
 
+// the image to render in color crt mode
+float image[size * 3];
+
 // the 3d path for the electron beam to trace
 vec3 path[1024];
 int vertex_count = 0;
@@ -213,6 +227,7 @@ float noise () {
 // 0 <= n <= 1
 // TODO: add bezier smoothing or something
 vec2 sample_path (float n) {
+    n += noise () * drawing_jitter;
     if (vertex_count == 0)
         return vec2 ().map ();
     else if (vertex_count == 1)
@@ -295,59 +310,75 @@ void prepare_path (float time) {
         return;
     }
 
-    // rotating cube
+    if (color_crt_mode) {
+        // prepare scanlines
+        for (int i = 0; i < height; i += 4) {
+            float y = (float) i / (height - 1) * 2 - 1;
+            path[vertex_count++] = vec3 (-1, y, 0);
+            path[vertex_count++] = vec3 (1, y, 0);
+        }
+    } else {
 
-    // normalized vertices
-    vec3 p000 = vec3 (-1, -1, -1);
-    vec3 p001 = vec3 (-1, -1, 1);
-    vec3 p010 = vec3 (-1, 1, -1);
-    vec3 p011 = vec3 (-1, 1, 1);
-    vec3 p100 = vec3 (1, -1, -1);
-    vec3 p101 = vec3 (1, -1, 1);
-    vec3 p110 = vec3 (1, 1, -1);
-    vec3 p111 = vec3 (1, 1, 1);
+        // rotating cube
 
-    // transformed vertices
-    mat4 transform = mat4 () * scale (0.3, 0.3, 0.3);
-    float angle = time * M_PI * 2 / 8;
-    transform = transform * rotate_y (angle);
-    transform = transform * rotate_x (angle);
-    vec3 p000_ = p000 * transform;
-    vec3 p001_ = p001 * transform;
-    vec3 p010_ = p010 * transform;
-    vec3 p011_ = p011 * transform;
-    vec3 p100_ = p100 * transform;
-    vec3 p101_ = p101 * transform;
-    vec3 p110_ = p110 * transform;
-    vec3 p111_ = p111 * transform;
+        // normalized vertices
+        vec3 p000 = vec3 (-1, -1, -1);
+        vec3 p001 = vec3 (-1, -1, 1);
+        vec3 p010 = vec3 (-1, 1, -1);
+        vec3 p011 = vec3 (-1, 1, 1);
+        vec3 p100 = vec3 (1, -1, -1);
+        vec3 p101 = vec3 (1, -1, 1);
+        vec3 p110 = vec3 (1, 1, -1);
+        vec3 p111 = vec3 (1, 1, 1);
 
-    // edges
-    path[vertex_count++] = p000_;
-    path[vertex_count++] = p001_;
-    path[vertex_count++] = p010_;
-    path[vertex_count++] = p011_;
-    path[vertex_count++] = p100_;
-    path[vertex_count++] = p101_;
-    path[vertex_count++] = p110_;
-    path[vertex_count++] = p111_;
+        // transformed vertices
+        mat4 transform = mat4 () * scale (0.3, 0.3, 0.3);
+        float angle = time * M_PI * 2 / 8;
+        transform = transform * rotate_y (angle);
+        transform = transform * rotate_x (angle);
+        vec3 p000_ = p000 * transform;
+        vec3 p001_ = p001 * transform;
+        vec3 p010_ = p010 * transform;
+        vec3 p011_ = p011 * transform;
+        vec3 p100_ = p100 * transform;
+        vec3 p101_ = p101 * transform;
+        vec3 p110_ = p110 * transform;
+        vec3 p111_ = p111 * transform;
 
-    path[vertex_count++] = p000_;
-    path[vertex_count++] = p010_;
-    path[vertex_count++] = p001_;
-    path[vertex_count++] = p011_;
-    path[vertex_count++] = p100_;
-    path[vertex_count++] = p110_;
-    path[vertex_count++] = p101_;
-    path[vertex_count++] = p111_;
+        // edges
+        path[vertex_count++] = p000_;
+        path[vertex_count++] = p001_;
+        path[vertex_count++] = p010_;
+        path[vertex_count++] = p011_;
+        path[vertex_count++] = p100_;
+        path[vertex_count++] = p101_;
+        path[vertex_count++] = p110_;
+        path[vertex_count++] = p111_;
 
-    path[vertex_count++] = p000_;
-    path[vertex_count++] = p100_;
-    path[vertex_count++] = p001_;
-    path[vertex_count++] = p101_;
-    path[vertex_count++] = p010_;
-    path[vertex_count++] = p110_;
-    path[vertex_count++] = p011_;
-    path[vertex_count++] = p111_;
+        path[vertex_count++] = p000_;
+        path[vertex_count++] = p010_;
+        path[vertex_count++] = p001_;
+        path[vertex_count++] = p011_;
+        path[vertex_count++] = p100_;
+        path[vertex_count++] = p110_;
+        path[vertex_count++] = p101_;
+        path[vertex_count++] = p111_;
+
+        path[vertex_count++] = p000_;
+        path[vertex_count++] = p100_;
+        path[vertex_count++] = p001_;
+        path[vertex_count++] = p101_;
+        path[vertex_count++] = p010_;
+        path[vertex_count++] = p110_;
+        path[vertex_count++] = p011_;
+        path[vertex_count++] = p111_;
+    }
+}
+
+void sample_color (float n) {
+    color_red = n * 2;
+    color_green = 2 - n * 2;
+    color_blue = 0;//noise ();
 }
 
 void render (float time) {
@@ -368,6 +399,9 @@ void render (float time) {
         // sample the ideal point on the path to be traced
         vec2 point = sample_path (n);
 
+        if (color_crt_mode)
+            sample_color (n);
+
         // TODO: add electron gun inertia for curving and overshoots
 
         // calculate random scattering
@@ -383,7 +417,8 @@ void render (float time) {
         y += (center_y - y) * power_supply_out_compliment;
 
         // clip
-        if (x < 0 || y < 0 || x >= width || y >= height)
+        // TODO: better clipping
+        if (x < 0 || y < 0 || x >= width - 2 || y >= height - 2)
             continue;
 
         // calculate intensity and adjust for decay at this time
@@ -393,8 +428,41 @@ void render (float time) {
         if (enable_phosphor_filter)
             intensity -= intensity * phosphor_decay * decay_curve;
 
-        // plot the result on the electron buffer
-        electron_buffer[int(x) + int(y) * width] += intensity;
+        if (color_crt_mode) {
+            // in this mode there are three electron beams in a delta gun pattern
+            int x_ = floor (point.x);
+            if (shadow_mask) {
+                if (int (x) % 3 > 0 || int (y) % 4 > 0) {
+                    continue;
+                }
+            }
+            float y_mid = y;
+            float y_side = y + 2;
+            if (x_ % 2 == 0) {
+                y_mid = y + 2;
+                y_side = y;
+            }
+            float intensity1, intensity2, intensity3;
+            if (x_ % 3 == 0) {
+                intensity1 = color_red;
+                intensity2 = color_green;
+                intensity3 = color_blue;
+            } else if (x_ % 3 == 1) {
+                intensity1 = color_blue;
+                intensity2 = color_red;
+                intensity3 = color_green;
+            } else {
+                intensity1 = color_green;
+                intensity2 = color_blue;
+                intensity3 = color_red;
+            }
+            electron_buffer[int (x) + 1 + int (y_mid)  * width] += intensity * intensity1;
+            electron_buffer[int (x)     + int (y_side) * width] += intensity * intensity2;
+            electron_buffer[int (x) + 2 + int (y_side) * width] += intensity * intensity3;
+        } else {
+            // plot the result on the electron buffer
+            electron_buffer[int (x) + int (y) * width] += intensity;
+        }
     }
 
     // update the phosphor buffer
@@ -528,8 +596,19 @@ void on_keyboard (GLFWwindow* window, int key, int scancode, int action, int mod
         power_supply_in = !power_supply_in;
 }
 
+void load_image () {
+
+    int w, h, n;
+    unsigned char *source = stbi_load ("source.png", &w, &h, &n, 3);
+    for(int i = 0; i < w * h * n;i++){
+        image[i] = source[i] / 255.0;
+    }
+    stbi_image_free(source);
+}
+
 int main (int argc, const char **argv) {
 
+    load_image ();
     generate_color_mask ();
     generate_kernel ();
     srand (time (0));
@@ -563,6 +642,7 @@ int main (int argc, const char **argv) {
         render (glfwGetTime ());
         glfwSwapBuffers (window);
         glfwPollEvents ();
+        frame++;
     }
 
     glfwTerminate();
