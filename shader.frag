@@ -10,7 +10,6 @@ uniform float brightness;
 
 // phosphor optical properties
 uniform vec3 reflectance;
-uniform vec3 emittance;
 
 // phosphor texture
 uniform sampler2D source;
@@ -22,11 +21,11 @@ vec3 sample_phosphor (vec2 position) {
     if (position.x < 0 || position.x >= resolution.x || position.y < 0 || position.y >= resolution.y)
         return vec3 (0.0, 0.0, 0.0);
     else
-        return texture (source, position / resolution).rrr * emittance + reflectance;
+        return texture (source, position / resolution).rgb + reflectance;
 }
 
 float sample_kernel (vec2 position) {
-    return texture (kernel, position / kernel_diameter).r;
+    return texture (kernel, position / (kernel_diameter - 1)).r;
 }
 
 void main () {
@@ -39,7 +38,7 @@ void main () {
     // if diameter is 0 then disable bloom lol
     if (kernel_diameter > 0) {
         // convolve
-        float kernel_radius = kernel_diameter / 2.0;
+        float kernel_radius = floor (kernel_diameter / 2.0);
         for (int i = 0; i < kernel_diameter * kernel_diameter; i++) {
             // get the kernel position
             float x = mod (float (i), kernel_diameter);

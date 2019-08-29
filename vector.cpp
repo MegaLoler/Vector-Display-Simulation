@@ -16,6 +16,8 @@ const float electron_intensity = 500;       // total energy emitted per frame
 const float electron_scattering = 0.25;     // impurity of the beam
 
 // phosphor parameters
+const bool color_crt_mode = false;           // false simulates monochrome vector display
+                                            // true simulates color crt with scanlines
 const bool enable_phosphor_filter = true;
 const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
@@ -29,6 +31,14 @@ const float phosphor_reflectance_blue = 0.003;
 const float phosphor_emittance_red = 0.2;
 const float phosphor_emittance_green = 1;
 const float phosphor_emittance_blue = 0.2;
+// red?
+//const float phosphor_emittance_red = 1;
+//const float phosphor_emittance_green = 0.2;
+//const float phosphor_emittance_blue = 0.2;
+// blue?
+//const float phosphor_emittance_red = 0.2;
+//const float phosphor_emittance_green = 0.2;
+//const float phosphor_emittance_blue = 1;
 
 // bloom parameters
 const int bloom_kernel_diameter = 10;       // 0 to disable bloom
@@ -177,7 +187,11 @@ float electron_buffer[size];
 
 // phosphor buffer
 // total emittance of phosphor at each pixel
-float phosphor_buffer[size];
+// rgb color
+float phosphor_buffer[size * 3];
+
+// phoshor colors
+float color_mask[size * 3];
 
 // convolution kernel for bloom shader
 float kernel[bloom_kernel_size];
@@ -214,18 +228,61 @@ vec2 sample_path (float n) {
     return vec3 (p1.x + delta.x, p1.y + delta.y, p1.z + delta.z).project ().map ();
 }
 
+// generate the delta gun pattern
+void generate_color_mask () {
+    if (color_crt_mode) {
+        for (int y = 0; y < height / 4; y++) {
+            for (int x = 0; x < width / 3; x++) {
+                int px = x * 3;
+                int py = y * 4;
+                int py_mid = py;
+                int py_side = py + 2;
+                if (x % 2 == 0) {
+                    py_mid = py + 2;
+                    py_side = py;
+                }
+                int px1 = px + 1;
+                int py1 = py_mid;
+                int px2 = px;
+                int py2 = py_side;
+                int px3 = px + 2;
+                int py3 = py_side;
+
+                // middle dot
+                color_mask[(px1 + py1 * width) * 3 + 0] = 1;    // red
+                color_mask[(px1 + py1 * width) * 3 + 1] = 0;    // green
+                color_mask[(px1 + py1 * width) * 3 + 2] = 0;    // blue
+
+                // left dot
+                color_mask[(px2 + py2 * width) * 3 + 0] = 0;    // red
+                color_mask[(px2 + py2 * width) * 3 + 1] = 1;    // green
+                color_mask[(px2 + py2 * width) * 3 + 2] = 0;    // blue
+
+                // right dot
+                color_mask[(px3 + py3 * width) * 3 + 0] = 0;    // red
+                color_mask[(px3 + py3 * width) * 3 + 1] = 0;    // green
+                color_mask[(px3 + py3 * width) * 3 + 2] = 1;    // blue
+            }
+        }
+    } else {
+        for (int i = 0; i < size * 3; i += 3) {
+            color_mask[i + 0] = phosphor_emittance_red;
+            color_mask[i + 1] = phosphor_emittance_green;
+            color_mask[i + 2] = phosphor_emittance_blue;
+        }
+    }
+}
+
 // generate the convolution kernel to pass to the bloom shader
 void generate_kernel () {
-    if (bloom_kernel_diameter > 0) {
-        for (int i = 0; i < bloom_kernel_size; i++) {
-            float x = i % bloom_kernel_diameter;
-            float y = i / bloom_kernel_diameter;
-            float offset_x = x - bloom_kernel_radius;
-            float offset_y = y - bloom_kernel_radius;
-            float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
-            float value = pow (radius, 1.0 / bloom_spread);
-            kernel[i] = fmax (0, 1 - value);
-        }
+    for (int i = 0; i < bloom_kernel_size; i++) {
+        float x = i % bloom_kernel_diameter;
+        float y = i / bloom_kernel_diameter;
+        float offset_x = x - bloom_kernel_radius;
+        float offset_y = y - bloom_kernel_radius;
+        float radius = sqrt (offset_x * offset_x + offset_y * offset_y) / bloom_kernel_diameter;
+        float value = pow (radius, 1.0 / bloom_spread);
+        kernel[i] = fmax (0, 1 - value);
     }
 }
 
@@ -341,17 +398,18 @@ void render (float time) {
     }
 
     // update the phosphor buffer
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size * 3; i++) {
+        float target = color_mask[i] * electron_buffer[i / 3];
         if (enable_phosphor_filter)
-            phosphor_buffer[i] += (electron_buffer[i] - phosphor_buffer[i]) * phosphor_decay;
+            phosphor_buffer[i] += (target - phosphor_buffer[i]) * phosphor_decay;
         else
-            phosphor_buffer[i] = electron_buffer[i];
+            phosphor_buffer[i] = target;
     }
 
     // render the phosphor buffer with bloom filter
     glActiveTexture(GL_TEXTURE0 + 0);
     glBindTexture (GL_TEXTURE_2D, phosphor_texture);
-    glTexImage2D (GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_FLOAT, phosphor_buffer);
+    glTexImage2D (GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, phosphor_buffer);
     glActiveTexture(GL_TEXTURE0 + 1);
     glBindTexture (GL_TEXTURE_2D, kernel_texture);
     glUseProgram (program);
@@ -443,7 +501,6 @@ void init_opengl () {
     glUniform1i (glGetUniformLocation (program, "kernel_diameter"), bloom_kernel_diameter);
     glUniform1f (glGetUniformLocation (program, "brightness"), bloom_brightness);
     glUniform3f (glGetUniformLocation (program, "reflectance"), phosphor_reflectance_red, phosphor_reflectance_green, phosphor_reflectance_blue);
-    glUniform3f (glGetUniformLocation (program, "emittance"), phosphor_emittance_red, phosphor_emittance_green, phosphor_emittance_blue);
 
     glUniform1i (glGetUniformLocation (program, "source"), 0);
     glUniform1i (glGetUniformLocation (program, "kernel"), 1);
@@ -473,6 +530,7 @@ void on_keyboard (GLFWwindow* window, int key, int scancode, int action, int mod
 
 int main (int argc, const char **argv) {
 
+    generate_color_mask ();
     generate_kernel ();
     srand (time (0));
 
