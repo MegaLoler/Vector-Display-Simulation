@@ -9,24 +9,25 @@
 // simulation mode
 // color crt mode simulates a color crt that draws scanlines
 // other mode is monochrome vector display
-const bool color_crt_mode = true;
-const bool shadow_mask = true;
+const bool color_crt_mode = false;
+const bool shadow_mask = false;
+const bool electron_guide = true;           // minimize lost electrons
 
 // drawing parameters
 const bool light_pen_mode = false;           // follows mouse cursor instead of drawing rotating cube
-const float drawing_jitter = color_crt_mode ? 0.00001 : 0;
+const float drawing_jitter = color_crt_mode ? 0.0000025 : 0;
 
 // power supply parameters
 const float power_supply_smoothing = color_crt_mode ? 0 : 3;    // per frame
 
 // electron beam parameters
-const int electron_count = color_crt_mode ? 80000 : 40000;           // per frame
-const float electron_intensity = color_crt_mode ? (shadow_mask ? 24000 : 2000) : 500;       // total energy emitted per frame
-const float electron_scattering = 0.25;     // impurity of the beam
+const int electron_count = color_crt_mode ? 120000 : 40000;           // per frame
+const float electron_intensity = color_crt_mode ? (shadow_mask ? 48000 : 12000) : 500;       // total energy emitted per frame
+const float electron_scattering = color_crt_mode ? 0.05 : 0.25;     // impurity of the beam
 
 // phosphor parameters
-const bool enable_phosphor_filter = true;
-const float phosphor_persistence = 5;       // divides how much emittance remains after one frame
+const bool enable_phosphor_filter = color_crt_mode ? true : true;
+const float phosphor_persistence = color_crt_mode ? 1 : 5;       // divides how much emittance remains after one frame
 const float phosphor_reflectance_red = 0.003;
 const float phosphor_reflectance_green = 0.003;
 const float phosphor_reflectance_blue = 0.003;
@@ -49,8 +50,8 @@ const float phosphor_emittance_blue = 0.2;
 
 // bloom parameters
 const int bloom_kernel_diameter = 10;       // 0 to disable bloom
-const float bloom_brightness = 15;
-const float bloom_spread = 100;
+const float bloom_brightness = color_crt_mode ? 8 : 15;
+const float bloom_spread = color_crt_mode ? 40 : 100;
 
 // screen dimensions
 // TODO: allow screen resizing
@@ -227,7 +228,6 @@ float noise () {
 // 0 <= n <= 1
 // TODO: add bezier smoothing or something
 vec2 sample_path (float n) {
-    n += noise () * drawing_jitter;
     if (vertex_count == 0)
         return vec2 ().map ();
     else if (vertex_count == 1)
@@ -312,8 +312,8 @@ void prepare_path (float time) {
 
     if (color_crt_mode) {
         // prepare scanlines
-        for (int i = 0; i < height; i += 4) {
-            float y = (float) i / (height - 1) * 2 - 1;
+        for (int i = height - 4; i >= 0; i -= 4) {
+            float y = (float) (i + 2) / height * 2 - 1;
             path[vertex_count++] = vec3 (-1, y, 0);
             path[vertex_count++] = vec3 (1, y, 0);
         }
@@ -376,9 +376,14 @@ void prepare_path (float time) {
 }
 
 void sample_color (float n) {
-    color_red = n * 2;
-    color_green = 2 - n * 2;
-    color_blue = 0;//noise ();
+    float nn = n * height / 4;
+    int line = floor (nn);  // the scanline
+    int y = floor (line * 2 / 3) + (frame % 2 == 0 ? 0 : 1);
+    int x = floor ((nn - line) * width) / 3;
+    int i = (x + y * width) * 3;
+    color_red = image[i];
+    color_green = image[i + 1];
+    color_blue = image[i + 2];
 }
 
 void render (float time) {
@@ -396,11 +401,14 @@ void render (float time) {
         power_supply_out += (power_supply_in - power_supply_out) * power_supply_decay;
         float power_supply_out_compliment = 1 - power_supply_out;
 
+        // add jitter to the sampling position
+        float sample = n + noise () * drawing_jitter;
+
         // sample the ideal point on the path to be traced
-        vec2 point = sample_path (n);
+        vec2 point = sample_path (sample);
 
         if (color_crt_mode)
-            sample_color (n);
+            sample_color (sample);
 
         // TODO: add electron gun inertia for curving and overshoots
 
@@ -415,6 +423,15 @@ void render (float time) {
         float y = point.y + offset_y;
         x += (center_x - x) * power_supply_out_compliment;
         y += (center_y - y) * power_supply_out_compliment;
+
+        if (color_crt_mode) {
+            if (electron_guide) {
+                point.x = floor (point.x / 3) * 3;
+                point.y = floor (point.y / 4) * 4;
+                x = floor (x / 3) * 3;
+                y = floor (y / 4) * 4;
+            }
+        }
 
         // clip
         // TODO: better clipping
