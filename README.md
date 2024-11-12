@@ -4,16 +4,21 @@ a simulation of a vector display!!!
 
 also a color crt mode!
 
-![Color TV](tv.png)
-should an a gif to show it turning on and off...
+
+
+https://github.com/user-attachments/assets/813c2c94-2369-4518-8fbf-52940d299fca
+
+
 
 ## demo animations comparison
 
-**these need to be updated... there was a bug that caused the intensity to underflow during powerdown with the phosphor filter on**
-
 electron beam -> phosphor -> bloom
 
-![All effects](all.gif)
+
+
+https://github.com/user-attachments/assets/e05708cb-c972-419c-99f9-0007bd2c588e
+
+
 
 
 electron beam only
